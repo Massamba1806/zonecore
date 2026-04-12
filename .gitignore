@@ -1,0 +1,12 @@
+chalandai_env/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+data/raw/
+data/processed/
+*.zip
+*.7z
+outputs/*.pdf
+.DS_Store
+Thumbs.db
