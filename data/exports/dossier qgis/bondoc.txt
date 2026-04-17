@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accidents de la route IDF 2024</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #map { height: 100vh; width: 100%; }
+        .info {
+            padding: 12px 16px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            font-size: 13px;
+            min-width: 200px;
+        }
+        .info h3 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #333;
+            border-bottom: 2px solid #E31A1C;
+            padding-bottom: 6px;
+        }
+        .legend {
+            padding: 12px 16px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            font-size: 12px;
+            line-height: 22px;
+        }
+        .legend h4 {
+            margin: 0 0 8px 0;
+            font-size: 13px;
+            color: #333;
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.8;
+            border-radius: 2px;
+        }
+        .titre-carte {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .titre-carte h2 {
+            margin: 0;
+            font-size: 16px;
+            color: #333;
+        }
+        .titre-carte p {
+            margin: 4px 0 0;
+            font-size: 11px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+<div class="titre-carte">
+    <h2>🚗 Accidents de la route en Île-de-France</h2>
+    <p>Source : data.gouv.fr — 2024 | Réalisation : Formation PostGIS</p>
+</div>
+
+<div id="map"></div>
+
+<script>
+    // Initialisation de la carte centrée sur l'IDF
+    var map = L.map('map').setView([48.8566, 2.3522], 9);
+
+    // Fond de carte OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 18
+    }).addTo(map);
+
+    // Couche WMS depuis GeoServer
+    var accidentsLayer = L.tileLayer.wms('http://localhost:8080/geoserver/cite/wms', {
+        layers: 'cite:carte_accidents_idf',
+        format: 'image/png',
+        transparent: true,
+        version: '1.1.0',
+        styles: 'cite:accidents_idf_style',
+        opacity: 0.85
+    }).addTo(map);
+
+    // Panneau d'information au survol
+    var info = L.control({position: 'topright'});
+
+    info.onAdd = function(map) {
+        this._div = L.DomUtil.create('div', 'info');
+        this.update();
+        return this._div;
+    };
+
+    info.update = function(props) {
+        this._div.innerHTML = '<h3>Accidents IDF 2024</h3>' +
+            (props ? 
+                '<b>' + props.nom_departement + '</b><br>' +
+                props.nombre_accidents + ' accidents<br>' +
+                '<small>Cliquez pour plus de détails</small>'
+            : 'Survolez un département');
+    };
+
+    info.addTo(map);
+
+    // Légende
+    var legend = L.control({position: 'bottomright'});
+
+    legend.onAdd = function(map) {
+        var div = L.DomUtil.create('div', 'legend');
+        div.innerHTML = '<h4>Nombre d\'accidents</h4>';
+        
+        var classes = [
+            { color: '#800026', label: 'Très élevé > 4 000' },
+            { color: '#E31A1C', label: 'Élevé 2 000 - 4 000' },
+            { color: '#FC4E2A', label: 'Moyen 1 000 - 2 000' },
+            { color: '#FED976', label: 'Faible < 1 000' }
+        ];
+
+        classes.forEach(function(c) {
+            div.innerHTML +=
+                '<i style="background:' + c.color + '"></i>' + c.label + '<br>';
+        });
+
+        div.innerHTML += '<br><small>Source : data.gouv.fr</small>';
+        return div;
+    };
+
+    legend.addTo(map);
+
+    // Clic sur la carte pour info détaillée
+    map.on('click', function(e) {
+        var url = 'http://localhost:8080/geoserver/cite/wms?' +
+            'SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo' +
+            '&LAYERS=cite:carte_accidents_idf' +
+            '&QUERY_LAYERS=cite:carte_accidents_idf' +
+            '&INFO_FORMAT=application/json' +
+            '&FEATURE_COUNT=1' +
+            '&X=50&Y=50' +
+            '&SRS=EPSG:4326' +
+            '&WIDTH=101&HEIGHT=101' +
+            '&BBOX=' + (e.latlng.lng - 0.1) + ',' + 
+                       (e.latlng.lat - 0.1) + ',' + 
+                       (e.latlng.lng + 0.1) + ',' + 
+                       (e.latlng.lat + 0.1);
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                if (data.features && data.features.length > 0) {
+                    var props = data.features[0].properties;
+                    info.update(props);
+                }
+            });
+    });
+</script>
+</body>
+</html>
+```
+
+Sauvegarde ce fichier sous :
+```
+C:\Users\Admin\Desktop\dossier qgis\carte_accidents_idf.html
