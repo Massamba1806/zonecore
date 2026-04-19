@@ -10,3 +10,7 @@ data/processed/
 outputs/*.pdf
 .DS_Store
 Thumbs.db
+
+data/exports/dossier qgis/
+
+*.backup
